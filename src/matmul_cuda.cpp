@@ -3,10 +3,8 @@
 
 torch::Tensor matmul_forward(torch::Tensor a1, torch::Tensor a2);
 
-// Python binding
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("matmul_forward", &matmul_forward, "Matrix multiplication forward (CUDA)");
-}
+// CUDA function declaration
+void matmul_cuda_forward(torch::Tensor a1, torch::Tensor a2, torch::Tensor out, int batch_size);
 
 torch::Tensor matmul_forward(torch::Tensor a1, torch::Tensor a2) {
     TORCH_CHECK(a1.device().is_cuda(), "a1 must be a CUDA tensor");
@@ -23,8 +21,10 @@ torch::Tensor matmul_forward(torch::Tensor a1, torch::Tensor a2) {
     return out;
 }
 
-// CUDA function declaration
-void matmul_cuda_forward(torch::Tensor a1, torch::Tensor a2, torch::Tensor out, int batch_size);
+// Python binding
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("matmul_forward", &matmul_forward, "Matrix multiplication forward (CUDA)");
+}
 
 
 

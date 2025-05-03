@@ -2,9 +2,9 @@ import torch
 import matmul_cuda
 
 def matmul(a1_tensor, a2_tensor):
-    assert a1_tensor.shape == a2_tensor.shape
-    assert a1_tensor.dim() == 3 and a1_tensor.size(1) == 32 and a1_tensor.size(2) == 32
-    assert a1_tensor.device.type == 'cpu' and a2_tensor.device.type == 'cpu'
+    #assert a1_tensor.shape == a2_tensor.shape
+    #assert a1_tensor.dim() == 3 and a1_tensor.size(1) == 32 and a1_tensor.size(2) == 32
+    #assert a1_tensor.device.type == 'cpu' and a2_tensor.device.type == 'cpu'
     assert a1_tensor.dtype == torch.float32
 
     a1_tensor = a1_tensor.cuda()
