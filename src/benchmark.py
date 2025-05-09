@@ -153,25 +153,9 @@ def run(args):
             end_event.record()
             torch.cuda.synchronize()
 
-            # --- BEGIN: Added for PyTorch timing comparison ---
-            print("Running PyTorch built-in matmul for timing comparison")
-            torch_start_event = torch.cuda.Event(enable_timing=True)
-            torch_end_event = torch.cuda.Event(enable_timing=True)
-            torch_start_event.record()
-            torch_matmul_res = A1_input @ A2_input
-            torch_end_event.record()
-            torch.cuda.synchronize()
-            # --- END: Added for PyTorch timing comparison ---
-
             print("Computation finished, processing results")
             compute_time_total = start_event.elapsed_time(end_event) * args.tscale
             compute_time_mean = compute_time_total / args.num_examples
-            # --- BEGIN: Added for PyTorch timing comparison ---
-            torch_compute_time_total = torch_start_event.elapsed_time(torch_end_event) * args.tscale
-            torch_compute_time_mean = torch_compute_time_total / args.num_examples
-            print("[Timing] Custom matmul total: ", compute_time_total, args.tscale_str, ", mean: ", compute_time_mean, args.tscale_str)
-            print("[Timing] PyTorch matmul total: ", torch_compute_time_total, args.tscale_str, ", mean: ", torch_compute_time_mean, args.tscale_str)
-            # --- END: Added for PyTorch timing comparison ---
             if not input_istensor:
                 res_tensor = torch.stack(matmul_res, dim=0).to(args.device)
             else:
