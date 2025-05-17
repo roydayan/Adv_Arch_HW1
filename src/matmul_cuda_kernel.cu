@@ -192,6 +192,5 @@ void matmul_cuda_forward(torch::Tensor a1, torch::Tensor a2, torch::Tensor out) 
         a2.data_ptr<float>(),
         out.data_ptr<float>()
     );
-    //for (int i=0; i<500000000;i++){}; // busy wait
 }
 */
