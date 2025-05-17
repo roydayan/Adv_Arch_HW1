@@ -11,5 +11,7 @@ setup(
     ],
     cmdclass={
         'build_ext': BuildExtension
-    }
+    },
+    #new:
+    #extra_compile_args = {'cxx': ['-O3'], 'nvcc': ['-O3', '--use_fast_math', '-arch=sm_75']}
 )

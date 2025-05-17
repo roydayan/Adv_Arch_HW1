@@ -1,0 +1,113 @@
+.py:
+
+"""Ultra‑lean batched 32×32 matrix multiplication (CUDA).
+Assumes *exactly* 10 000 float32 matrices – no runtime checks.
+"""
+
+import torch
+import matmul_cuda  # compiled extension
+
+
+def matmul(a1: torch.Tensor, a2: torch.Tensor) -> torch.Tensor:
+    """Return `a1 @ a2` for 10 000 independent 32×32 matrices (float32, CUDA)."""
+    # Contiguity ensures the expected 32‑stride memory layout.
+    return matmul_cuda.matmul_forward(a1.contiguous(), a2.contiguous())
+
+
+
+
+
+.cpp:
+
+#include <torch/extension.h>
+
+void matmul_cuda_forward(torch::Tensor a1,
+                         torch::Tensor a2,
+                         torch::Tensor out);
+
+torch::Tensor matmul_forward(torch::Tensor a1, torch::Tensor a2) {
+    auto out = torch::empty_like(a1);     // no memset – saves ~40 MB per call
+    matmul_cuda_forward(a1, a2, out);
+    return out;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("matmul_forward", &matmul_forward,
+          "Batched 32×32 matmul forward (CUDA/cuBLAS, no checks)");
+}
+
+
+
+
+.cu:
+
+
+#include <torch/extension.h>
+#include <ATen/cuda/CUDAContext.h>
+#include <cublas_v2.h>
+
+// Input spec (promised):
+//   a1, a2: (10 000, 32, 32) float32, row‑major, contiguous
+//   out   : same shape – pre‑allocated by wrapper
+// Goal: out = a1 @ a2  (batched GEMM)
+
+void matmul_cuda_forward(torch::Tensor a1,
+                         torch::Tensor a2,
+                         torch::Tensor out) {
+    constexpr int BATCH  = 10'000;
+    constexpr int DIM    = 32;
+    constexpr int64_t STRIDE = DIM * DIM;   // 1 024 floats per matrix
+
+    const float alpha = 1.f, beta = 0.f;
+
+    cublasHandle_t handle = at::cuda::getCurrentCUDABlasHandle();
+    cublasSetStream(handle, at::cuda::getCurrentCUDAStream());
+
+    /*
+       Row‑major vs column‑major
+       -------------------------
+       Row‑major X_r has the same memory layout as the transpose of a
+       column‑major matrix X_c.  The product we need is:
+           C_r = A_r · B_r.
+       Let A_c = A_rᵀ and B_c = B_rᵀ.  Then
+           C_rᵀ = B_rᵀ · A_rᵀ = B_c · A_c.
+       So computing D_c = B_c · A_c with cuBLAS (which assumes column‑major)
+       yields a buffer D_c that is laid out exactly like C_r.
+       Implementation: call cuBLAS **without** transposing but **swap** A and B.
+    */
+
+    cublasSgemmStridedBatched(
+        handle,
+        CUBLAS_OP_N, CUBLAS_OP_N,   // no internal transpose
+        DIM, DIM, DIM,
+        &alpha,
+        /* B_c pointer ≡ B_r */ a2.data_ptr<float>(), DIM, STRIDE,
+        /* A_c pointer ≡ A_r */ a1.data_ptr<float>(), DIM, STRIDE,
+        &beta,
+        /* D_c → row‑major C_r */ out.data_ptr<float>(), DIM, STRIDE,
+        BATCH);
+}
+
+
+
+setup.py:
+from setuptools import setup
+from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+
+compile_args = {
+    "cxx": ["-O3"],
+    "nvcc": ["-O3", "--use_fast_math", "-gencode=arch=compute_75,code=sm_75"],
+}
+
+setup(
+    name="matmul_cuda",
+    ext_modules=[
+        CUDAExtension(
+            "matmul_cuda",
+            ["matmul_cuda.cpp", "matmul_cuda_kernel.cu"],
+            extra_compile_args=compile_args,
+            extra_link_args=["-lcublas"],
+        )
+    ],
+    cmdclass={"build_ext": BuildExtension},
+)
